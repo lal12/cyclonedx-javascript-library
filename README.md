@@ -88,6 +88,7 @@ written in _TypeScript_ and compiled for the target.
   * `1.3`
   * `1.2`
 * Normalizers that convert data models to JSON structures
+* Denormalizers that convert JSON structures to data models
 * Normalizers that convert data models to XML structures
 * Universal serializer that converts `Bom` data models to JSON string
 * Specific  Serializer that converts `Bom` data models to XML string:

@@ -26,6 +26,9 @@ export interface NormalizerOptions {
   sortLists?: boolean
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface DenormalizerOptions {}
+
 export interface SerializerOptions {
   /**
    * Add indention in the serialization result. Indention increases readability for humans.
@@ -33,10 +36,20 @@ export interface SerializerOptions {
   space?: string | number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface DesserializerOptions {}
+
 export interface Serializer {
   /**
    * @throws {@link Serialize.MissingOptionalDependencyError | MissingOptionalDependencyError}, when a required dependency was not installed
    * @throws {@link Error}
    */
   serialize: (bom: Bom, options?: SerializerOptions & NormalizerOptions) => string
+}
+
+export interface Deserializer {
+  /**
+   * @throws {@link Error}
+   */
+  deserialize: (str: string, options?: DesserializerOptions & DenormalizerOptions) => Bom
 }
