@@ -88,6 +88,10 @@ export class Factory {
   makeForUrl (): (url: string, options: DenormalizerOptions) => (URL | string) {
     return (u, o) => denormalizeUrl(u, o, this)
   }
+
+  makeForBomRef (): (ref: string, options: DenormalizerOptions) => Models.BomRef {
+    return (r, o) => denormalizeBomRef(r, o, this)
+  }
 }
 
 interface JsonDenormalizer<TModel, TNormalized> {
@@ -109,26 +113,29 @@ abstract class BaseJsonDenormalizer<TModel, TNormalized = object> implements Jso
 }
 
 export class BomDenormalizer extends BaseJsonDenormalizer<Models.Bom> {
-  denormalize (data: Normalized.Bom, options: DenormalizerOptions): Models.Bom {
+  denormalize (data: any, options: DenormalizerOptions): Models.Bom {
     const spec = SpecVersionDict[data.specVersion as SpecVersion]
-    if (spec === undefined) {
-      throw new UnsupportedFormatError(`Spec version ${data.specVersion} is not supported.`)
+    if(spec === undefined){
+      throw new UnsupportedFormatError(`Spec version ${data.specVersion} is not unknown.`);
     }
     this.factory.spec = spec
     if (!this.factory.spec.supportsFormat('json')) {
       throw new UnsupportedFormatError(`Spec version ${data.specVersion} is not supported for JSON format.`)
     }
     const bom = new Models.Bom({
-      metadata: (data.metadata != null) ? this._factory.makeForMetadata().denormalize(data.metadata, options) : undefined,
-      components: (data.components != null) ? new Models.ComponentRepository(data.components.map(c => this._factory.makeForComponent().denormalize(c, options))) : undefined,
-      serialNumber: data.serialNumber,
-      version: data.version
+      components: Array.isArray(data.components) ? new Models.ComponentRepository(data.components.map((c: any) => this._factory.makeForComponent().denormalize(c, options))),
+      metadata: (data.metadata !== undefined) ? this._factory.makeForMetadata().denormalize(data.metadata, options) : undefined,
+      serialNumber: (typeof data.serialNumber === 'string') ? data.serialNumber : undefined,
+      version: (Number.isInteger(data.version)) ? data.version : undefined,
+      // TODO
+      //vulnerabilities: (Array.isArray(data.vulnerabilities)) ? new Models.Vulnerability.VulnerabilityRepository(data.vulnerabilities.map(v => this._factory.makeForVulnerability()(v, options)))
     })
     const dependencyList = new Map<string, Models.BomRef[]>()
     if (Array.isArray(data.dependencies)) {
+      const brf = this._factory.makeForBomRef();
       for (const { ref, dependsOn } of data.dependencies) {
-        if (dependsOn != null) {
-          dependencyList.set(ref, dependsOn.map(d => new Models.BomRef(d)))
+        if (Array.isArray(dependsOn) && typeof ref === 'string') {
+          dependencyList.set(ref, dependsOn.map(d => brf(ref, options)))
         }
       }
     }
@@ -314,4 +321,9 @@ export function denormalizeUrl (url: string, options: DenormalizerOptions, facto
   } catch (e) {
     return url
   }
+}
+
+export function denormalizeBomRef(ref: string, options: DenormalizerOptions, factory: Factory): Models.BomRef {
+  //TODO: regex validation
+  return new Models.BomRef(ref);
 }
