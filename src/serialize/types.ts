@@ -52,8 +52,7 @@ export interface JSONDenormalizerWarningTypeMismatch {
   type: 'type'
   path: PathType
   value: any
-  expected: VarType
-  nullAllowed: boolean
+  expected: VarType[]
   actual: VarType
 }
 export interface JSONDenormalizerWarningInvalidValue {
