@@ -28,8 +28,10 @@ export function splitNameGroup (data: string): [string, string?] {
 }
 
 /**
- * @see {@link https://github.com/SchemaStore/schemastore/blob/master/src/schemas/json/package.json | PackageJson spec}
- * @see {@link https://docs.npmjs.com/cli/v8/configuring-npm/package-json | PackageJson description}
+ * Intended to represent normalized data structures
+ * based on [PackageJson spec](https://github.com/SchemaStore/schemastore/blob/master/src/schemas/json/package.json)
+ * and explained by [PackageJson description](https://docs.npmjs.com/cli/v9/configuring-npm/package-json).
+ * Normalization should be done downstream, for example via [`normalize-package-data`](https://www.npmjs.com/package/normalize-package-data).
  */
 export interface PackageJson {
   name?: string
