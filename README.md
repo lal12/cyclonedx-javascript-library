@@ -1,5 +1,6 @@
-[![shield_gh-workflow-test]][link_gh-workflow-test]
 [![shield_npm-version]][link_npm]
+[![shield_gh-workflow-test]][link_gh-workflow-test]
+[![shield_coverage]][link_codacy]
 [![shield_license]][license_file]  
 [![shield_website]][link_website]
 [![shield_slack]][link_slack]
@@ -73,6 +74,8 @@ written in _TypeScript_ and compiled for the target.
     * `Reference`, `ReferenceRepository`
     * `Source`
     * `Vulnerability`, `VulnerabilityRepository`
+* Utilities for the following use cases:
+  * Generate valid random SerialNumbers for `Bom.serialNumber`
 * Factories for the following use cases:
   * Create data models from any license descriptor string
   * Create `PackageURL` from `Component` data models
@@ -89,6 +92,7 @@ written in _TypeScript_ and compiled for the target.
 * Universal serializer that converts `Bom` data models to JSON string
 * Deserializer that converts JSON string to `Bom` data models
 * Serializer that converts `Bom` data models to XML string:
+* Specific  Serializer that converts `Bom` data models to XML string:
   * Specific to _WebBrowsers_: implementation utilizes browser-specific document generators and printers.
   * Specific to _Node.js_: implementation plugs/requires/utilizes one of the following _optional_ libraries
     * [xmlbuilder2](https://www.npmjs.com/package/xmlbuilder2)
@@ -165,7 +169,7 @@ Additionally, there is a prepared set of configs for [TypeDoc](https://typedoc.o
 
 ## Development & Contributing
 
-Feel free to open issues, bugreports or pull requests.  
+Feel free to open issues, bug reports or pull requests.  
 See the [CONTRIBUTING][contributing_file] file for details.
 
 ## License
@@ -173,14 +177,15 @@ See the [CONTRIBUTING][contributing_file] file for details.
 Permission to modify and redistribute is granted under the terms of the Apache 2.0 license.  
 See the [LICENSE][license_file] file for the full license.
 
-[CycloneDX-spec]: https://github.com/CycloneDX/specification/tree/main/schema
+[CycloneDX-spec]: https://github.com/CycloneDX/specification/#readme
 
 [license_file]: https://github.com/CycloneDX/cyclonedx-javascript-library/blob/main/LICENSE
 [contributing_file]: https://github.com/CycloneDX/cyclonedx-javascript-library/blob/main/CONTRIBUTING.md
 [examples]: https://github.com/CycloneDX/cyclonedx-javascript-library/tree/main/examples/README.md
 
-[shield_gh-workflow-test]: https://img.shields.io/github/actions/workflow/status/CycloneDX/cyclonedx-javascript-library/nodejs.yml?branch=main&logo=GitHub&logoColor=white "tests"
 [shield_npm-version]: https://img.shields.io/npm/v/@cyclonedx/cyclonedx-library?logo=npm&logoColor=white "npm"
+[shield_gh-workflow-test]: https://img.shields.io/github/actions/workflow/status/CycloneDX/cyclonedx-javascript-library/nodejs.yml?branch=main&logo=GitHub&logoColor=white "tests"
+[shield_coverage]: https://img.shields.io/codacy/coverage/ae6c086b53d54653ad5077b12ec22264?logo=Codacy&logoColor=white "test coverage"
 [shield_license]: https://img.shields.io/github/license/CycloneDX/cyclonedx-javascript-library?logo=open%20source%20initiative&logoColor=white "license"
 [shield_website]: https://img.shields.io/badge/https://-cyclonedx.org-blue.svg "homepage"
 [shield_slack]: https://img.shields.io/badge/slack-join-blue?logo=Slack&logoColor=white "slack join"
@@ -188,8 +193,9 @@ See the [LICENSE][license_file] file for the full license.
 [shield_twitter-follow]: https://img.shields.io/badge/Twitter-follow-blue?logo=Twitter&logoColor=white "twitter follow"
 
 [link_website]: https://cyclonedx.org/
-[link_gh-workflow-test]: https://github.com/CycloneDX/cyclonedx-javascript-library/actions/workflows/nodejs.yml?query=branch%3Amain
 [link_npm]: https://www.npmjs.com/package/@cyclonedx/cyclonedx-library
+[link_gh-workflow-test]: https://github.com/CycloneDX/cyclonedx-javascript-library/actions/workflows/nodejs.yml?query=branch%3Amain
+[link_codacy]: https://app.codacy.com/gh/CycloneDX/cyclonedx-javascript-library/dashboard
 [link_slack]: https://cyclonedx.org/slack/invite
 [link_discussion]: https://groups.io/g/CycloneDX
 [link_twitter]: https://twitter.com/CycloneDX_Spec

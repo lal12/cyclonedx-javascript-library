@@ -1,0 +1,24 @@
+{
+  "all": true,
+  "src": [
+    "./libs"
+  ],
+  "exclude": [
+    "**/*.spec.*", "**/*.test.*",
+    "**/*.d.ts",
+    "**/*.cache/**",
+    "reports/**",
+    "test{,s}/**",
+    "**/{ava,babel,nyc}.config.{js,cjs,mjs}",
+    "**/jest.config.{js,cjs,mjs,ts}",
+    "**/{karma,rollup,webpack}.config.js",
+    "**/.{eslint,mocha}rc.{js,cjs}"
+  ],
+  "reporter": ["text", "clover", "html"],
+  "reporterOptions": {
+    "clover": {"file": "coverage.clover.xml"},
+    "html": {"subdir": "coverage.html"}
+  },
+  "reports-dir": "./reports",
+  "temp-directory": "./.c8.cache"
+}

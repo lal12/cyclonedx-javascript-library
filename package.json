@@ -1,19 +1,28 @@
 {
   "name": "@cyclonedx/cyclonedx-library",
-  "version": "1.12.0",
+  "version": "1.13.2",
   "description": "Core functionality of CycloneDX for JavaScript (Node.js or WebBrowser).",
+  "license": "Apache-2.0",
   "keywords": [
     "CycloneDX",
-    "SBOM",
-    "BOM",
-    "inventory",
+    "models",
+    "normalizer",
+    "serializer",
     "bill-of-materials",
+    "BOM",
     "software-bill-of-materials",
-    "component",
-    "dependency",
+    "SBOM",
+    "OBOM",
+    "MBOM",
+    "SaaSBOM",
+    "VEX",
     "package-url",
     "PURL",
-    "spdx"
+    "SPDX",
+    "OWASP",
+    "inventory",
+    "component",
+    "dependency"
   ],
   "homepage": "https://github.com/CycloneDX/cyclonedx-javascript-library#readme",
   "repository": {
@@ -23,7 +32,16 @@
   "bugs": {
     "url": "https://github.com/CycloneDX/cyclonedx-javascript-library/issues"
   },
-  "license": "Apache-2.0",
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/jkowalleck"
+    },
+    {
+      "type": "individual",
+      "url": "https://owasp.org/donate/?reponame=www-project-cyclonedx&title=OWASP+CycloneDX"
+    }
+  ],
   "author": {
     "name": "Jan Kowalleck",
     "url": "https://github.com/jkowalleck"
@@ -55,7 +73,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.0",
     "@types/node": ">=14",
-    "@types/webpack": "^5.28.0",
+    "c8": "^7.13.0",
     "deepmerge": "^4.2.2",
     "eslint": "^8.23.0",
     "eslint-config-standard-with-typescript": "^34.0.0",
@@ -69,14 +87,17 @@
     "typedoc": "^0.23.24",
     "typedoc-plugin-missing-exports": "^1.0.0",
     "typescript": "4.9.5",
-    "webpack": "5.75.0",
-    "webpack-cli": "5.0.1",
-    "xmlbuilder2": "^3.0.2"
+    "webpack": "5.77.0",
+    "webpack-cli": "5.0.1"
   },
   "browser": "./dist.web/lib.js",
   "types": "./dist.d/index.node.d.ts",
   "main": "./dist.node/index.node.js",
-  "exports": "./dist.node/index.node.js",
+  "exports": {
+    "types": "./dist.d/index.node.d.ts",
+    "browser": "./dist.web/lib.js",
+    "default": "./dist.node/index.node.js"
+  },
   "directories": {
     "doc": "./docs",
     "src": "./src",
@@ -97,7 +118,7 @@
     "build:d": "tsc -b ./tsconfig.d.json",
     "cs-fix": "eslint --fix .",
     "test": "run-p --aggregate-output -lc test:*",
-    "test:node": "mocha -p",
+    "test:node": "c8 mocha -p",
     "test:web": "node -e 'console.log(\"TODO: write web test\")'",
     "test:standard": "eslint .",
     "api-doc": "run-p --aggregate-output -lc api-doc:*",

@@ -5,13 +5,19 @@ name: Node CI
 on:
   push:
     branches: [ main ]
+    tags: [ "v*" ]  # have tools scan this stable version
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   NODE_ACTIVE_LTS: "18" # see https://nodejs.org/en/about/releases/
-  REPORTS_DIR: "reports"
+  REPORTS_DIR: "CI_reports"
+  TESTS_REPORTS_ARTIFACT: tests-reports
+  STANDARD_REPORTS_ARTIFACT: cs-reports
 
 jobs:
   build:
@@ -47,6 +53,7 @@ jobs:
           name: dist.${{ matrix.target }}
           path: dist.${{ matrix.target }}
           if-no-files-found: error
+
   test-standard:
     name: test standard
     runs-on: ubuntu-latest
@@ -83,9 +90,10 @@ jobs:
         uses: actions/upload-artifact@v3
         if: ${{ failure() }}
         with:
-          name: eslint-results
+          name: ${{ env.STANDARD_REPORTS_ARTIFACT }}
           path: ${{ env.REPORTS_DIR }}
           if-no-files-found: error
+
   test-node:
     needs: [ 'build' ]
     name: test node (${{ matrix.node-version }}, ${{ matrix.os }})
@@ -127,28 +135,101 @@ jobs:
           path: dist.node
       - name: test
         run: npm run test:node
-  # test-web:
+      - name: collect coverage
+        if: ${{ failure() || success() }}
+        run: >
+          npx c8 report 
+          --reporter clover 
+          --reports-dir '${{ env.REPORTS_DIR }}/coverage/${{ matrix.os }}_node${{ matrix.node-version }}'
+      - name: artifact test reports
+        if: ${{ ! cancelled() }}
+        # see https://github.com/actions/upload-artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.TESTS_REPORTS_ARTIFACT }}
+          path: ${{ env.REPORTS_DIR }}
+    # test-web:
     # TODO via https://github.com/CycloneDX/cyclonedx-javascript-library/issues/51
-  test-declaration:
+  report-coverage:
+    name: Publish test coverage
+    needs: [ "test-node" ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: fetch test artifacts
+        # see https://github.com/actions/download-artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.TESTS_REPORTS_ARTIFACT }}
+          path: ${{ env.REPORTS_DIR }}
+      - name: Run codacy-coverage-reporter
+        env:
+          CODACY_PROJECT_TOKEN:  ${{ secrets.CODACY_PROJECT_TOKEN }}
+        if: ${{ env.CODACY_PROJECT_TOKEN != '' }} ## see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#example-using-secrets
+        # see https://github.com/codacy/codacy-coverage-reporter-action
+        uses: codacy/codacy-coverage-reporter-action@v1
+        with:
+          project-token: ${{ env.CODACY_PROJECT_TOKEN }}
+          coverage-reports: ${{ env.REPORTS_DIR }}/coverage/*/*
+
+  examples-JS:
     needs: [ 'build' ]
-    name: digest declarations (TS${{ matrix.typescript-version }})
+    name: example JS ${{ matrix.js-type }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - # latest 4.X
-            typescript-version: '^4'
-          # - # some 4.0.x
-          #  typescript-version: '~4.0'
-          - # latest 3.X
-            typescript-version: '^3'
-            nodeTypes-version: '^16'
-          - # some 3.8.x - lowest reasonable number that works
-            typescript-version: '3.8.2'
-            nodeTypes-version: '^16'
+        js-type: [ 'cjs', 'mjs' ]
     env:
-      EXAMPLE_DIR: examples/node-typescript
+      EXAMPLE_DIR: examples/node-javascript
+    steps:
+      - name: Checkout
+        # see https://github.com/actions/checkout
+        uses: actions/checkout@v3
+      - name: Setup Node.js ${{ env.NODE_ACTIVE_LTS }}
+        # see https://github.com/actions/setup-node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_ACTIVE_LTS }}
+      - name: fetch build artifact 'node'
+        # see https://github.com/actions/download-artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: dist.node
+          path: dist.node
+      - name: setup library
+        run: npm i --ignore-scripts --omit=dev --include=optional
+      - name: setup example project
+        run: npm i --no-save
+        working-directory: ${{ env.EXAMPLE_DIR }}
+      - name: run example
+        run: node -- 'example.${{ matrix.js-type }}'
+        working-directory: ${{ env.EXAMPLE_DIR }}
+
+  example-typescript:
+    needs: [ 'build' ]
+    name: example TS${{ matrix.typescript-version }} ${{ matrix.js-type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        typescript-version:
+          - '^5'      # latest 5.X
+          - '^4'      # latest 4.X
+          - '^3'      # latest 3.X
+        js-type: [ 'cjs', 'mjs' ]
+        include:
+          ## some @types/node versions were incompatible or caused issues
+          - typescript-version: '^3'
+            nodeTypes-version: '^16'
+          - typescript-version: '3.8.2' # lowest reasonable number that works
+            js-type: 'cjs'
+            nodeTypes-version: '^14'
+        exclude:
+          - typescript-version: '^3'
+            js-type: 'mjs'
+    env:
+      EXAMPLE_DIR: examples/node-typescript/example.${{ matrix.js-type }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -159,25 +240,33 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ env.NODE_ACTIVE_LTS }}
-      - name: fetch build artifact
+      - name: fetch build artifact 'd'
         # see https://github.com/actions/download-artifact
         uses: actions/download-artifact@v3
         with:
           name: dist.d
           path: dist.d
+      - name: fetch build artifact 'node'
+        # see https://github.com/actions/download-artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: dist.node
+          path: dist.node
       - name: setup library
-        run: npm i --ignore-scripts --omit=dev
+        run: npm i --ignore-scripts --omit=dev --include=optional
       - name: setup example project
         run: >
           npm i --no-save
           'typescript@${{ matrix.typescript-version }}'
           '@types/node@${{ matrix.nodeTypes-version || env.NODE_ACTIVE_LTS }}'
         working-directory: ${{ env.EXAMPLE_DIR }}
-      - run: npm ls
-        working-directory: ${{ env.EXAMPLE_DIR }}
-      - name: use type declarations
+      - name: build example
         run: npm run build
         working-directory: ${{ env.EXAMPLE_DIR }}
+      - name: run example
+        run: npm run example
+        working-directory: ${{ env.EXAMPLE_DIR }}
+
   api-doc:
     name: api-doc ${{ matrix.target }}
     runs-on: "ubuntu-latest"
