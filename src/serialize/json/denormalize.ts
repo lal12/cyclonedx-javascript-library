@@ -20,9 +20,12 @@ Copyright (c) OWASP Foundation. All Rights Reserved.
 import { PackageURL } from 'packageurl-js'
 
 import { AttachmentEncoding, ComponentScope, ComponentType, ExternalReferenceType, HashAlgorithm } from '../../enums'
+import { AffectStatus, AnalysisJustification, AnalysisResponse, AnalysisResponseRepository, AnalysisState, RatingMethod, Severity } from '../../enums/vulnerability'
 import * as Models from '../../models'
 import type { Protocol, Protocol as Spec } from '../../spec'
 import { Format, SpecVersionDict, UnsupportedFormatError } from '../../spec'
+import type { CWE } from '../../types'
+import { CweRepository, isCWE } from '../../types'
 import type { JSONDenormalizerOptions, JSONDenormalizerWarning, PathType } from '../types'
 
 interface JSONDenormalizerContext {
@@ -51,6 +54,12 @@ function assertNonEmptyStr (value: unknown, path: PathType): asserts value is st
 function assertEnum<KT> (value: unknown, allowed: KT[], path: PathType): asserts value is KT {
   if (!allowed.includes(value as any)) {
     throw new TypeError(`${formatPath(path)} is ${JSON.stringify(value)} but should be one of ${JSON.stringify(allowed)}`)
+  }
+}
+
+function assertRecord (value: unknown, path: PathType): asserts value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    throw new TypeError(`${formatPath(path)} is ${typeof value} but should be an object`)
   }
 }
 
@@ -83,6 +92,34 @@ function warnStringOrUndef (value: unknown, ctx: JSONDenormalizerContext, path: 
       value
     })
     return undefined
+  }
+  return value
+}
+
+function warnDateOrUndef (value: unknown, ctx: JSONDenormalizerContext, path: PathType): Date | undefined {
+  if (value !== undefined) {
+    if (typeof value !== 'string') {
+      callWarnFunc(ctx, {
+        type: 'type',
+        actual: typeof value,
+        expected: ['string', 'undefined'],
+        path,
+        value
+      })
+      return undefined
+    } else {
+      try {
+        return new Date(value)
+      } catch (e) {
+        callWarnFunc(ctx, {
+          type: 'value',
+          path,
+          value,
+          message: 'should be a valid date string'
+        })
+        return undefined
+      }
+    }
   }
   return value
 }
@@ -248,6 +285,50 @@ export class Factory {
   makeForBomRef (ctx: JSONDenormalizerContext): BomRefDenormalizer {
     return new BomRefDenormalizer(this)
   }
+
+  makeForVulnerability (ctx: JSONDenormalizerContext): VulnerabilityDenormalizer {
+    return new VulnerabilityDenormalizer(this)
+  }
+
+  makeForVulnerabilitySource (ctx: JSONDenormalizerContext): VulnerabilitySourceDenormalizer {
+    return new VulnerabilitySourceDenormalizer(this)
+  }
+
+  makeForVulnerabilityReference (ctx: JSONDenormalizerContext): VulnerabilityReferenceDenormalizer {
+    return new VulnerabilityReferenceDenormalizer(this)
+  }
+
+  makeForVulnerabilityRating (ctx: JSONDenormalizerContext): VulnerabilityRatingDenormalizer {
+    return new VulnerabilityRatingDenormalizer(this)
+  }
+
+  makeForCwe (ctx: JSONDenormalizerContext): CweDenormalizer {
+    return new CweDenormalizer(this)
+  }
+
+  makeForVulnerabilityAdvisory (ctx: JSONDenormalizerContext): VulnerabilityAdvisoryDenormalizer {
+    return new VulnerabilityAdvisoryDenormalizer(this)
+  }
+
+  makeForVulnerabilityCredits (ctx: JSONDenormalizerContext): VulnerabilityCreditsDenormalizer {
+    return new VulnerabilityCreditsDenormalizer(this)
+  }
+
+  makeForVulnerabilityAnalysis (ctx: JSONDenormalizerContext): VulnerabilityAnalysisDenormalizer {
+    return new VulnerabilityAnalysisDenormalizer(this)
+  }
+
+  makeForVulnerabilityResponse (ctx: JSONDenormalizerContext): VulnerabilityResponseDenormalizer {
+    return new VulnerabilityResponseDenormalizer(this)
+  }
+
+  makeForVulnerabilityAffect (ctx: JSONDenormalizerContext): VulnerabilityAffectDenormalizer {
+    return new VulnerabilityAffectDenormalizer(this)
+  }
+
+  makeForVulnerabilityAffectedVersion (ctx: JSONDenormalizerContext): VulnerabilityAffectedVersionDenormalizer {
+    return new VulnerabilityAffectedVersionDenormalizer(this)
+  }
 }
 
 interface JsonDenormalizer<TModel, TNormalized> {
@@ -285,9 +366,8 @@ export class BomDenormalizer extends BaseJsonDenormalizer<Models.Bom> {
       components: createRepository(data.components, ctx, [...path, 'components'], this._factory.makeForComponent(ctx), Models.ComponentRepository),
       metadata: denormalizeRecord(data.metadata, ctx, [...path, 'metadata'], this._factory.makeForMetadata(ctx)),
       serialNumber: warnStringOrUndef(data.serialNumber, ctx, [...path, 'serialNumber']),
-      version: warnNumberOrUndef(data.version, ctx, [...path, 'version'])
-      // TODO
-      // vulnerabilities: (Array.isArray(data.vulnerabilities)) ? new Models.Vulnerability.VulnerabilityRepository(data.vulnerabilities.map(v => this._factory.makeForVulnerability()(v, options)))
+      version: warnNumberOrUndef(data.version, ctx, [...path, 'version']),
+      vulnerabilities: createRepository(data.vulnerabilities, ctx, [...path, 'vulnerabilities'], this._factory.makeForVulnerability(ctx), Models.Vulnerability.VulnerabilityRepository)
     })
 
     const allComps = ctx.allComps
@@ -502,5 +582,136 @@ export class BomRefDenormalizer extends BaseJsonDenormalizer<Models.BomRef> {
   denormalize (data: unknown, ctx: JSONDenormalizerContext, path: PathType): Models.BomRef {
     assertNonEmptyStr(data, path)
     return new Models.BomRef(data)
+  }
+}
+
+export class VulnerabilityDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Vulnerability> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Vulnerability {
+    return new Models.Vulnerability.Vulnerability({
+      bomRef: warnStringOrUndef(data.bomRef, ctx, [...path, 'bomRef']),
+      id: warnStringOrUndef(data.id, ctx, [...path, 'id']),
+      source: denormalizeRecord(data.source, ctx, [...path, 'source'], this._factory.makeForVulnerabilitySource(ctx)),
+      references: createRepository(data.references, ctx, [...path, 'references'], this._factory.makeForVulnerabilityReference(ctx), Models.Vulnerability.ReferenceRepository),
+      ratings: createRepository(data.ratings, ctx, [...path, 'ratings'], this._factory.makeForVulnerabilityRating(ctx), Models.Vulnerability.RatingRepository),
+      cwes: createRepository(data.cwes, ctx, [...path, 'cwes'], this._factory.makeForCwe(ctx), CweRepository),
+      description: warnStringOrUndef(data.description, ctx, [...path, 'description']),
+      detail: warnStringOrUndef(data.detail, ctx, [...path, 'detail']),
+      recommendation: warnStringOrUndef(data.recommendation, ctx, [...path, 'recommendation']),
+      advisories: createRepository(data.advisories, ctx, [...path, 'advisories'], this._factory.makeForVulnerabilityAdvisory(ctx), Models.Vulnerability.AdvisoryRepository),
+      created: warnDateOrUndef(data.created, ctx, [...path, 'created']),
+      published: warnDateOrUndef(data.published, ctx, [...path, 'published']),
+      updated: warnDateOrUndef(data.updated, ctx, [...path, 'updated']),
+      credits: denormalizeRecord(data.credits, ctx, [...path, 'credits'], this._factory.makeForVulnerabilityCredits(ctx)),
+      tools: createRepository(data.tools, ctx, [...path, 'tools'], this._factory.makeForTool(ctx), Models.ToolRepository),
+      analysis: denormalizeRecord(data.analysis, ctx, [...path, 'analysis'], this._factory.makeForVulnerabilityAnalysis(ctx)),
+      affects: createRepository(data.affects, ctx, [...path, 'affects'], this._factory.makeForVulnerabilityAffect(ctx), Models.Vulnerability.AffectRepository),
+      properties: createRepository(data.properties, ctx, [...path, 'properties'], this._factory.makeForProperty(ctx), Models.PropertyRepository)
+    })
+  }
+}
+
+export class VulnerabilitySourceDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Source> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Source {
+    return new Models.Vulnerability.Source({
+      name: warnStringOrUndef(data.name, ctx, [...path, 'name']),
+      url: warnStringOrUndef(data.url, ctx, [...path, 'url'])
+    })
+  }
+}
+
+export class VulnerabilityReferenceDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Reference> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Reference {
+    assertNonEmptyStr(data.id, [...path, 'id'])
+    assertRecord(data.source, [...path, 'source'])
+    return new Models.Vulnerability.Reference(
+      data.id,
+      this._factory.makeForVulnerabilitySource(ctx).denormalize(data.source, ctx, [...path, 'source'])
+    )
+  }
+}
+
+export class VulnerabilityRatingDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Rating> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Rating {
+    return new Models.Vulnerability.Rating({
+      source: denormalizeRecord(data.source, ctx, [...path, 'source'], this._factory.makeForVulnerabilitySource(ctx)),
+      score: warnNumberOrUndef(data.score, ctx, [...path, 'score']),
+      severity: warnEnumOrUndef(data.severity, Object.values(Severity), ctx, [...path, 'severity']),
+      method: warnEnumOrUndef(data.method, Object.values(RatingMethod), ctx, [...path, 'method']),
+      vector: warnStringOrUndef(data.vector, ctx, [...path, 'vector']),
+      justification: warnStringOrUndef(data.justification, ctx, [...path, 'justification'])
+    })
+  }
+}
+
+export class CweDenormalizer extends BaseJsonDenormalizer<CWE> {
+  denormalize (data: unknown, ctx: JSONDenormalizerContext, path: PathType): CWE {
+    if (!isCWE(data)) {
+      throw new RangeError(`${formatPath(path)} should be CWE`)
+    }
+    return data
+  }
+}
+
+export class VulnerabilityAdvisoryDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Advisory> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Advisory {
+    assertNonEmptyStr(data.url, [...path, 'url'])
+    return new Models.Vulnerability.Advisory(
+      data.url,
+      { title: warnStringOrUndef(data.title, ctx, [...path, 'title']) }
+    )
+  }
+}
+
+export class VulnerabilityCreditsDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Credits> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Credits {
+    return new Models.Vulnerability.Credits({
+      individuals: createRepository(data.individuals, ctx, [...path, 'individuals'], this._factory.makeForOrganizationalContact(ctx), Models.OrganizationalContactRepository),
+      organizations: createRepository(data.organizations, ctx, [...path, 'organizations'], this._factory.makeForOrganizationalEntity(ctx), Models.OrganizationalEntityRepository)
+    })
+  }
+}
+
+export class VulnerabilityAnalysisDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Analysis> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Analysis {
+    return new Models.Vulnerability.Analysis({
+      detail: warnStringOrUndef(data.detail, ctx, [...path, 'detail']),
+      justification: warnEnumOrUndef(data.justification, Object.values(AnalysisJustification), ctx, [...path, 'justification']),
+      response: createRepository(data.response, ctx, [...path, 'response'], this._factory.makeForVulnerabilityResponse(ctx), AnalysisResponseRepository),
+      state: warnEnumOrUndef(data.state, Object.values(AnalysisState), ctx, [...path, 'state'])
+    })
+  }
+}
+
+export class VulnerabilityResponseDenormalizer extends BaseJsonDenormalizer<AnalysisResponse> {
+  denormalize (data: unknown, ctx: JSONDenormalizerContext, path: PathType): AnalysisResponse {
+    assertEnum(data, Object.values(AnalysisResponse), path)
+    return data
+  }
+}
+
+export class VulnerabilityAffectDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.Affect> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.Affect {
+    assertNonEmptyStr(data.ref, [...path, 'ref'])
+    return new Models.Vulnerability.Affect(this._factory.makeForBomRef(ctx).denormalize(data.ref, ctx, [...path, 'ref']), {
+      versions: createRepository(data.versions, ctx, [...path, 'versions'], this._factory.makeForVulnerabilityAffectedVersion(ctx), Models.Vulnerability.AffectedVersionRepository)
+    })
+  }
+}
+
+export class VulnerabilityAffectedVersionDenormalizer extends BaseJsonDenormalizer<Models.Vulnerability.AffectedVersion> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Vulnerability.AffectedVersion {
+    if ('version' in data) {
+      assertNonEmptyStr(data.version, [...path, 'version'])
+      return new Models.Vulnerability.AffectedSingleVersion(data.version, {
+        status: warnEnumOrUndef(data.status, Object.values(AffectStatus), ctx, [...path, 'status'])
+      })
+    } else if ('range' in data) {
+      assertNonEmptyStr(data.range, [...path, 'range'])
+      return new Models.Vulnerability.AffectedVersionRange(data.range, {
+        status: warnEnumOrUndef(data.status, Object.values(AffectStatus), ctx, [...path, 'status'])
+      })
+    } else {
+      throw new TypeError(`${formatPath(path)} should contain version or range`)
+    }
   }
 }
