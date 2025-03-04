@@ -22,15 +22,15 @@ import { PackageURL } from 'packageurl-js'
 import { AttachmentEncoding, ComponentScope, ComponentType, ExternalReferenceType, HashAlgorithm } from '../../enums'
 import { AffectStatus, AnalysisJustification, AnalysisResponse, AnalysisResponseRepository, AnalysisState, RatingMethod, Severity } from '../../enums/vulnerability'
 import * as Models from '../../models'
-import type { Protocol, Protocol as Spec } from '../../spec'
 import { Format, SpecVersionDict, UnsupportedFormatError } from '../../spec'
 import type { CWE } from '../../types'
 import { CweRepository, isCWE } from '../../types'
 import type { JSONDenormalizerOptions, JSONDenormalizerWarning, PathType } from '../types'
+import { _SpecProtocol } from '../../spec/_protocol'
 
 interface JSONDenormalizerContext {
   options: JSONDenormalizerOptions
-  spec: Spec
+  spec: _SpecProtocol
   allComps: Map<Models.BomRef, Models.Component>
 }
 
@@ -246,6 +246,10 @@ export class Factory {
     return new ToolDenormalizer(this)
   }
 
+  makeForTools (ctx: JSONDenormalizerContext): ToolsDenormalizer {
+    return new ToolsDenormalizer(this)
+  }
+
   makeForOrganizationalContact (ctx: JSONDenormalizerContext): OrganizationalContactDenormalizer {
     return new OrganizationalContactDenormalizer(this)
   }
@@ -329,6 +333,10 @@ export class Factory {
   makeForVulnerabilityAffectedVersion (ctx: JSONDenormalizerContext): VulnerabilityAffectedVersionDenormalizer {
     return new VulnerabilityAffectedVersionDenormalizer(this)
   }
+
+  makeForService (ctx: JSONDenormalizerContext): ServiceDenormalizer {
+    return new ServiceDenormalizer(this)
+  }
 }
 
 interface JsonDenormalizer<TModel, TNormalized> {
@@ -353,7 +361,7 @@ export class BomDenormalizer extends BaseJsonDenormalizer<Models.Bom> {
   denormalize (data: Record<string, unknown>, { options }: { options: JSONDenormalizerOptions }, path: PathType): Models.Bom {
     assertEnum(data.bomFormat, ['CycloneDX'], [...path, 'bomFormat'])
     assertEnum(data.specVersion, Object.keys(SpecVersionDict), [...path, 'specVersion'])
-    const spec = SpecVersionDict[data.specVersion as keyof typeof SpecVersionDict] as Protocol
+    const spec = SpecVersionDict[data.specVersion as keyof typeof SpecVersionDict] as _SpecProtocol
     if (!spec.supportsFormat(Format.JSON)) {
       throw new UnsupportedFormatError(`Spec version ${spec.version} is not supported for JSON format.`)
     }
@@ -419,7 +427,9 @@ export class MetadataDenormalizer extends BaseJsonDenormalizer<Models.Metadata> 
       manufacture: denormalizeRecord(data.manufacture, ctx, [...path, 'manufacture'], doe),
       supplier: denormalizeRecord(data.supplier, ctx, [...path, 'supplier'], doe),
       timestamp: ts !== undefined ? new Date(ts) : undefined,
-      tools: createRepository(data.tools, ctx, [...path, 'tools'], this._factory.makeForTool(ctx), Models.ToolRepository)
+      tools: ctx.spec.supportsToolsComponentsServices ? 
+        denormalizeRecord(data.tools, ctx, [...path, 'tools'], this._factory.makeForTools(ctx)) 
+        : new Models.Tools({tools: createRepository(data.tools, ctx, [...path, 'tools'], this._factory.makeForTool(ctx), Models.ToolRepository),}),
     })
   }
 }
@@ -466,6 +476,16 @@ export class ToolDenormalizer extends BaseJsonDenormalizer<Models.Tool> {
       version: warnStringOrUndef(data.version, ctx, [...path, 'version']),
       externalReferences: createRepository(data.externalReferences, ctx, [...path, 'externalReferences'], erdn, Models.ExternalReferenceRepository),
       hashes: createRepository(data.hashes, ctx, [...path, 'hashes'], this._factory.makeForHash(ctx), Models.HashDictionary)
+    })
+  }
+}
+
+export class ToolsDenormalizer extends BaseJsonDenormalizer<Models.Tools> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Tools {
+    return new Models.Tools({
+      components: createRepository(data.components, ctx, [...path, 'components'], this._factory.makeForComponent(ctx), Models.ComponentRepository),
+      services: createRepository(data.services, ctx, [...path, 'services'], this._factory.makeForService(ctx), Models.ServiceRepository),
+      tools: createRepository(data.tools, ctx, [...path, 'tools'], this._factory.makeForTool(ctx), Models.ToolRepository)
     })
   }
 }
@@ -602,7 +622,7 @@ export class VulnerabilityDenormalizer extends BaseJsonDenormalizer<Models.Vulne
       published: warnDateOrUndef(data.published, ctx, [...path, 'published']),
       updated: warnDateOrUndef(data.updated, ctx, [...path, 'updated']),
       credits: denormalizeRecord(data.credits, ctx, [...path, 'credits'], this._factory.makeForVulnerabilityCredits(ctx)),
-      tools: createRepository(data.tools, ctx, [...path, 'tools'], this._factory.makeForTool(ctx), Models.ToolRepository),
+      tools: ctx.spec.supportsToolsComponentsServices ? denormalizeRecord(data.tools, ctx, [...path, 'tools'], this._factory.makeForTools(ctx)) : new Models.Tools({tools: createRepository(data.tools, ctx, [...path, 'tools'], this._factory.makeForTool(ctx), Models.ToolRepository),}),
       analysis: denormalizeRecord(data.analysis, ctx, [...path, 'analysis'], this._factory.makeForVulnerabilityAnalysis(ctx)),
       affects: createRepository(data.affects, ctx, [...path, 'affects'], this._factory.makeForVulnerabilityAffect(ctx), Models.Vulnerability.AffectRepository),
       properties: createRepository(data.properties, ctx, [...path, 'properties'], this._factory.makeForProperty(ctx), Models.PropertyRepository)
@@ -713,5 +733,23 @@ export class VulnerabilityAffectedVersionDenormalizer extends BaseJsonDenormaliz
     } else {
       throw new TypeError(`${formatPath(path)} should contain version or range`)
     }
+  }
+}
+
+export class ServiceDenormalizer extends BaseJsonDenormalizer<Models.Service> {
+  denormalize (data: Record<string, unknown>, ctx: JSONDenormalizerContext, path: PathType): Models.Service {
+    assertNonEmptyStr(data.name, [...path, 'name'])
+    return new Models.Service(data.name, {
+      description: warnStringOrUndef(data.description, ctx, [...path, 'description']),
+      group: warnStringOrUndef(data.group, ctx, [...path, 'group']),
+      bomRef: warnStringOrUndef(data['bom-ref'], ctx, [...path, 'bom-ref']),
+      dependencies: createRepository(data.dependencies, ctx, [...path, 'dependencies'], this._factory.makeForBomRef(ctx), Models.BomRefRepository),
+      externalReferences: createRepository(data.externalReferences, ctx, [...path, 'externalReferences'], this._factory.makeForExternalReference(ctx), Models.ExternalReferenceRepository),
+      licenses: createRepository(data.licenses, ctx, [...path, 'licenses'], this._factory.makeForLicense(ctx), Models.LicenseRepository),
+      properties: createRepository(data.properties, ctx, [...path, 'properties'], this._factory.makeForProperty(ctx), Models.PropertyRepository),
+      provider: denormalizeRecord(data.provider, ctx, [...path, 'provider'], this._factory.makeForOrganizationalEntity(ctx)),
+      services: createRepository(data.services, ctx, [...path, 'services'], this, Models.ServiceRepository),
+      version: warnStringOrUndef(data.version, ctx, [...path, 'version'])
+    });
   }
 }
