@@ -42,7 +42,6 @@ export * from './jsonSerializer'
 // region XML
 
 export * as XML from './xml'
-export * from './xmlBaseSerializer'
 // export * from './xmlBaseDeserializer' // @TODO
 
 // endregion XML

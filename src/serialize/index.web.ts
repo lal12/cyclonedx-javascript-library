@@ -21,7 +21,6 @@ export * from './index.common'
 
 // region web-specifics
 
-export * from './xmlSerializer.web'
 // export * from './xmlDeserializer.web' // @TODO
 
 // endregion web-specifics

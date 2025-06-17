@@ -22,6 +22,5 @@ export * from './index.common'
 // region node-specifics
 
 export * from './jsonValidator.node'
-export * from './xmlValidator.node'
 
 // endregion node-specifics
